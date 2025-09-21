@@ -1,0 +1,86 @@
+import cv2
+from ultralytics import YOLO
+import csv
+import datetime
+
+# -----------------------------
+# SETTINGS
+# -----------------------------
+MODEL_NAME = "yolov8n.pt"  # Pretrained YOLOv8 nano
+TARGET_CLASS = "person"    # Change to "person", "car", etc.
+SAVE_LOG = True            # Save counts into CSV log
+CSV_FILE = "object_counts.csv"
+
+# -----------------------------
+# INITIALIZE
+# -----------------------------
+# Load YOLO model
+model = YOLO(MODEL_NAME)
+
+# Open webcam (0 = default cam, or replace with video file path)
+cap = cv2.VideoCapture(0)
+
+# Setup CSV logging
+if SAVE_LOG:
+    with open(CSV_FILE, mode="w", newline="") as file:
+        writer = csv.writer(file)
+        writer.writerow(["Timestamp", f"{TARGET_CLASS} Count"])
+
+print("🚀 Object Counter Started! Press 'q' to quit.")
+
+# -----------------------------
+# MAIN LOOP
+# -----------------------------
+while True:
+    ret, frame = cap.read()
+    if not ret:
+        break
+
+    # Run YOLO object detection
+    results = model(frame)
+
+    # Extract detections
+    detections = results[0].boxes
+
+    count = 0
+    for box in detections:
+        cls_id = int(box.cls[0])          # class ID
+        conf = float(box.conf[0])         # confidence
+        x1, y1, x2, y2 = map(int, box.xyxy[0])  # box coords
+
+        label = model.names[cls_id]
+
+        # Count only selected class
+        if label == TARGET_CLASS:
+            count += 1
+            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+            cv2.putText(frame, f"{label} {conf:.2f}",
+                        (x1, y1 - 10),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.6, (0, 255, 0), 2)
+
+    # Show object count on screen
+    cv2.putText(frame, f"{TARGET_CLASS} Count: {count}",
+                (20, 40), cv2.FONT_HERSHEY_SIMPLEX,
+                1, (0, 0, 255), 3)
+
+    # Save log
+    if SAVE_LOG:
+        with open(CSV_FILE, mode="a", newline="") as file:
+            writer = csv.writer(file)
+            timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            writer.writerow([timestamp, count])
+
+    # Display the video
+    cv2.imshow("Object Counter", frame)
+
+    # Quit if 'q' pressed
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
+
+# -----------------------------
+# CLEANUP
+# -----------------------------
+cap.release()
+cv2.destroyAllWindows()
+print("✅ Project Ended. Logs saved in:", CSV_FILE)
